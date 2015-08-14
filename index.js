@@ -3,7 +3,7 @@
 require('es6-promise').polyfill();
 
 var _ = require('underscore-contrib');
-var questor = require('questor');
+var axios = require('axios');
 var redefine = require('redefine');
 var querystring = require('querystring');
 
@@ -86,7 +86,7 @@ var Client = redefine.Class({
       backoff = createBackoff(this.options.maxRetries)
     }
 
-    var uri = [
+    options.url = [
       this.options.secure ? 'https' : 'http',
       '://',
       _.first(this.options.host.split(':')),
@@ -97,10 +97,12 @@ var Client = redefine.Class({
       querystring.stringify(options.query)
     ].join('');
 
-    var self = this;
-    var response = questor(uri, options).then(parseJSONBody)
+    var response = axios(options).then(function (response) {
+      return response.data;
+    });
 
     if (backoff) {
+      var self = this;
       response = response.catch(function(error) {
         // Rate-limited by the server, maybe backoff and retry
         if (error.status === 429) {
@@ -113,8 +115,8 @@ var Client = redefine.Class({
     }
     
     return response.catch(function (error) {
-      if (!('body' in error)) {
-        // Attach request info to errors that don't have a response body
+      if (!error.data) {
+        // Attach request info to errors that don't have a well formed response body
         error.request = {
           method: options.method,
           uri: uri,
@@ -123,9 +125,8 @@ var Client = redefine.Class({
         throw error;
       }
 
-      // Otherwise parse, wrap, and rethrow the error
-      error = parseJSONBody(error);
-      throw new APIError(error, {
+      // Otherwise wrap and rethrow the error
+      throw new APIError(error.data, {
         method: options.method,
         uri: uri,
         body: options.body
