@@ -706,5 +706,6 @@ function walkMutate(input, pred, mutator) {
 
 function parseJSONBody(response) {
   if (!response.body) return;
+  response.body.httpStatusCode = response.status;
   return JSON.parse(response.body);
 }
